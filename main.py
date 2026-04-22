@@ -2,6 +2,7 @@ import logging
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import os
+from db.queries import get_or_create_user, get_balance, add_balance
 
 from db.database import engine
 from db.models import Base
