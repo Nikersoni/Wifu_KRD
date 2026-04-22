@@ -29,7 +29,12 @@ async def on_startup(dp):
 
 @dp.message_handler(commands=["start"])
 async def start_cmd(message: types.Message):
-    await message.answer("Бот с БД работает ✅")
+    await get_or_create_user(message.from_user.id)
+
+    await message.answer(
+        "👋 Добро пожаловать!\n"
+        "Напиши: профиль"
+    )
 
 
 if __name__ == "__main__":
