@@ -1,6 +1,7 @@
 import logging
 import os
 from aiogram import Bot, Dispatcher, executor, types
+from sqlalchemy import text
 
 from db import *
 
@@ -22,31 +23,39 @@ async def on_startup(dp):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+        # добавим стартовые карты
+        await conn.execute(text("""
+        INSERT INTO cards (name, rarity) VALUES
+        ('Asuna', '🟡'),
+        ('Rem', '🟣'),
+        ('Zero Two', '🔵'),
+        ('Mikasa', '🟢'),
+        ('Hinata', '⚪')
+        ON CONFLICT DO NOTHING;
+        """))
+
     print("✅ DB OK")
 
 
-# 🔥 ОСНОВНОЙ ХЕНДЛЕР
+# 🔥 основной обработчик
 @dp.message_handler()
 async def main_handler(message: types.Message):
     print("MESSAGE:", message.text)
 
-    text = message.text.lower()
+    text_msg = message.text.lower()
     user_id = message.from_user.id
 
     # 👋 старт
-    if text == "/start":
+    if text_msg == "/start":
         user = await get_user(user_id)
 
         if not user:
             await create_user(user_id)
 
-        await message.answer(
-            "👋 Добро пожаловать!\n"
-            "Напиши: профиль"
-        )
+        await message.answer("👋 Добро пожаловать\nНапиши: профиль")
 
     # 👤 профиль
-    elif text == "профиль":
+    elif text_msg == "профиль":
         user = await get_user(user_id)
 
         if not user:
@@ -59,10 +68,40 @@ async def main_handler(message: types.Message):
         )
 
     # 💰 тест деньги
-    elif text == "/add":
+    elif text_msg == "/add":
         await add_balance(user_id, 100)
-
         await message.answer("💰 +100 монет")
+
+    # 🎴 получить карту
+    elif text_msg == "карта":
+        card = await give_card(user_id)
+
+        if not card:
+            await message.answer("❌ Нет карт в базе")
+            return
+
+        card_data, unique_id = card
+
+        await message.answer(
+            f"🎴 Ты получил карту!\n"
+            f"🆔 ID: {unique_id}\n"
+            f"⭐ {card_data.name} ({card_data.rarity})"
+        )
+
+    # 🎒 инвентарь
+    elif text_msg == "инвентарь":
+        items = await get_inventory(user_id)
+
+        if not items:
+            await message.answer("📭 Инвентарь пуст")
+            return
+
+        text = "🎒 Твои карты:\n\n"
+
+        for uc, c in items[:10]:
+            text += f"🆔 {uc.id} | {c.name} ({c.rarity})\n"
+
+        await message.answer(text)
 
     else:
         await message.answer("❓ Неизвестная команда")
