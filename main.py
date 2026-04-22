@@ -1,4 +1,4 @@
-from aiogram import executor
+from aiogram import executor, types
 from loader import dp
 import handlers
 
@@ -6,6 +6,7 @@ from db.database import engine
 from db.models import Base
 
 
+# 🚀 Запуск
 async def on_startup(dp):
     print("🚀 Bot starting...")
 
@@ -19,10 +20,18 @@ async def on_startup(dp):
         print(f"❌ DB ERROR: {e}")
 
 
+# 🛑 Остановка
 async def on_shutdown(dp):
     print("🛑 Bot stopped")
 
 
+# 🔍 Лог входящих сообщений (в самом низу!)
+@dp.message_handler(content_types=types.ContentType.TEXT)
+async def debug_log(message: types.Message):
+    print(f"MSG: {message.text}")
+
+
+# ▶️ Запуск бота
 if __name__ == "__main__":
     executor.start_polling(
         dp,
@@ -30,8 +39,3 @@ if __name__ == "__main__":
         on_shutdown=on_shutdown,
         skip_updates=True
     )
-from aiogram import types
-
-@dp.message_handler()
-async def test(message: types.Message):
-    print(f"MSG: {message.text}")
