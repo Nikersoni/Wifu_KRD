@@ -30,3 +30,8 @@ if __name__ == "__main__":
         on_shutdown=on_shutdown,
         skip_updates=True
     )
+from aiogram import types
+
+@dp.message_handler()
+async def test(message: types.Message):
+    print(f"MSG: {message.text}")
