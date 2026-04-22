@@ -3,7 +3,6 @@ from db.models import User
 from sqlalchemy import select
 
 
-# 🔹 получить или создать пользователя
 async def get_or_create_user(user_id: int):
     async with async_session() as session:
         result = await session.execute(
@@ -19,7 +18,6 @@ async def get_or_create_user(user_id: int):
         return user
 
 
-# 🔹 получить баланс
 async def get_balance(user_id: int):
     async with async_session() as session:
         result = await session.execute(
@@ -29,7 +27,6 @@ async def get_balance(user_id: int):
         return user.balance if user else 0
 
 
-# 🔹 добавить деньги
 async def add_balance(user_id: int, amount: int):
     async with async_session() as session:
         result = await session.execute(
