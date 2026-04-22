@@ -1,32 +1,35 @@
-from aiogram import executor
-from loader import dp
-import handlers
+import logging
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+import os
 
-from db.database import engine
-from db.models import Base
+logging.basicConfig(level=logging.INFO)
+
+TOKEN = os.getenv("BOT_TOKEN")
+
+bot = Bot(token=TOKEN)
+dp = Dispatcher(bot, storage=MemoryStorage())
 
 
+# 🚀 запуск
 async def on_startup(dp):
-    print("🚀 Bot starting...")
+    print("🚀 Bot started")
 
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-        print("✅ Database connected")
-
-    except Exception as e:
-        print(f"❌ DB ERROR: {e}")
+    # 💥 убираем конфликт
+    await bot.delete_webhook(drop_pending_updates=True)
 
 
-async def on_shutdown(dp):
-    print("🛑 Bot stopped")
+# ✅ тест команда
+@dp.message_handler(commands=["start"])
+async def start_cmd(message: types.Message):
+    await message.answer("Бот работает ✅")
+
+
+# ✅ текст
+@dp.message_handler()
+async def echo(message: types.Message):
+    await message.answer(f"Ты написал: {message.text}")
 
 
 if __name__ == "__main__":
-    executor.start_polling(
-        dp,
-        on_startup=on_startup,
-        on_shutdown=on_shutdown,
-        skip_updates=True
-    )
+    executor.start_polling(dp, on_startup=on_startup, skip_updates=True)
