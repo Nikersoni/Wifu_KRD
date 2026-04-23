@@ -1,8 +1,10 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, BigInteger, String, select
 import os
 import random
+from datetime import datetime
+
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import Column, Integer, BigInteger, String, select, DateTime
 
 DB_URL = os.getenv("DATABASE_URL")
 
@@ -18,16 +20,17 @@ Session = sessionmaker(
 Base = declarative_base()
 
 
-# 👤 пользователь
+# 👤 USERS
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, unique=True)
     balance = Column(Integer, default=0)
+    last_card = Column(DateTime)
 
 
-# 🎴 карты
+# 🎴 CARDS
 class Card(Base):
     __tablename__ = "cards"
 
@@ -36,7 +39,7 @@ class Card(Base):
     rarity = Column(String)
 
 
-# 🎒 карты пользователя
+# 🎒 USER CARDS
 class UserCard(Base):
     __tablename__ = "user_cards"
 
@@ -45,24 +48,25 @@ class UserCard(Base):
     card_id = Column(Integer)
 
 
-# 🔹 получить пользователя
-async def get_user(user_id):
+# ===== ЛОГИКА =====
+
+# получить/создать юзера
+async def get_or_create_user(user_id):
     async with Session() as session:
         result = await session.execute(
             select(User).where(User.user_id == user_id)
         )
-        return result.scalar()
+        user = result.scalar()
+
+        if not user:
+            user = User(user_id=user_id, balance=0)
+            session.add(user)
+            await session.commit()
+
+        return user
 
 
-# 🔹 создать пользователя
-async def create_user(user_id):
-    async with Session() as session:
-        user = User(user_id=user_id, balance=0)
-        session.add(user)
-        await session.commit()
-
-
-# 🔹 добавить баланс
+# баланс
 async def add_balance(user_id, amount):
     async with Session() as session:
         result = await session.execute(
@@ -70,15 +74,35 @@ async def add_balance(user_id, amount):
         )
         user = result.scalar()
 
-        if user:
-            user.balance += amount
-            await session.commit()
+        user.balance += amount
+        await session.commit()
 
 
-# 🎴 случайная карта
-async def get_random_card():
+# 🎴 дроп с шансами
+RARITY_CHANCES = [
+    ("⚪", 50),
+    ("🟢", 25),
+    ("🔵", 15),
+    ("🟣", 8),
+    ("🟡", 2),
+]
+
+
+def roll_rarity():
+    roll = random.randint(1, 100)
+    total = 0
+
+    for rarity, chance in RARITY_CHANCES:
+        total += chance
+        if roll <= total:
+            return rarity
+
+
+async def get_card_by_rarity(rarity):
     async with Session() as session:
-        result = await session.execute(select(Card))
+        result = await session.execute(
+            select(Card).where(Card.rarity == rarity)
+        )
         cards = result.scalars().all()
 
         if not cards:
@@ -87,26 +111,37 @@ async def get_random_card():
         return random.choice(cards)
 
 
-# 🎴 выдать карту
+# 🎴 выдать карту (с КД)
 async def give_card(user_id):
     async with Session() as session:
-        result = await session.execute(select(Card))
-        cards = result.scalars().all()
+        result = await session.execute(
+            select(User).where(User.user_id == user_id)
+        )
+        user = result.scalar()
 
-        if not cards:
-            return None
+        # ⏳ КД 4 часа
+        if user.last_card:
+            diff = (datetime.utcnow() - user.last_card).total_seconds()
+            if diff < 14400:
+                return None, int(14400 - diff)
 
-        card = random.choice(cards)
+        rarity = roll_rarity()
+        card = await get_card_by_rarity(rarity)
+
+        if not card:
+            return None, None
 
         new_card = UserCard(
             user_id=user_id,
             card_id=card.id
         )
 
+        user.last_card = datetime.utcnow()
+
         session.add(new_card)
         await session.commit()
 
-        return card, new_card.id
+        return (card, new_card.id), None
 
 
 # 🎒 инвентарь
@@ -117,5 +152,4 @@ async def get_inventory(user_id):
             .join(Card, UserCard.card_id == Card.id)
             .where(UserCard.user_id == user_id)
         )
-
         return result.all()
