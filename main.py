@@ -13,16 +13,16 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
 
-# 🚀 запуск
+# 🚀 старт
 async def on_startup(dp):
-    print("🚀 START OK")
+    print("🚀 BOT START")
 
     await bot.delete_webhook(drop_pending_updates=True)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # добавляем стартовые карты (если пусто)
+        # стартовые карты
         await conn.execute(text("""
         INSERT INTO cards (name, rarity) VALUES
         ('Asuna', '🟡'),
@@ -33,83 +33,70 @@ async def on_startup(dp):
         ON CONFLICT DO NOTHING;
         """))
 
-    print("✅ DB OK")
+    print("✅ DB READY")
 
 
-# 🔥 основной обработчик
+# 📩 сообщения
 @dp.message_handler()
-async def main_handler(message: types.Message):
-    print("MESSAGE:", message.text)
-
-    text_msg = message.text.lower()
+async def handler(message: types.Message):
+    text = message.text.lower()
     user_id = message.from_user.id
 
-    # 👋 старт
-    if text_msg == "/start":
-        user = await get_user(user_id)
+    user = await get_or_create_user(user_id)
 
-        if not user:
-            await create_user(user_id)
-
+    if text == "/start":
         await message.answer(
-            "👋 Добро пожаловать!\n"
+            "👋 Добро пожаловать\n"
             "Команды:\n"
-            "профиль\n"
-            "карта\n"
-            "инвентарь"
+            "профиль\nкарта\nинвентарь"
         )
 
-    # 👤 профиль
-    elif text_msg == "профиль":
-        user = await get_user(user_id)
-
-        if not user:
-            await create_user(user_id)
-            user = await get_user(user_id)
-
+    elif text == "профиль":
         await message.answer(
             f"👤 Профиль\n"
             f"💰 Баланс: {user.balance}"
         )
 
-    # 💰 тест деньги
-    elif text_msg == "/add":
-        await add_balance(user_id, 100)
-        await message.answer("💰 +100 монет")
+    elif text == "карта":
+        result, cooldown = await give_card(user_id)
 
-    # 🎴 получить карту
-    elif text_msg == "карта":
-        card = await give_card(user_id)
-
-        if not card:
-            await message.answer("❌ Нет карт в базе")
+        if cooldown:
+            minutes = cooldown // 60
+            await message.answer(f"⏳ Подожди {minutes} мин")
             return
 
-        card_data, unique_id = card
+        if not result:
+            await message.answer("❌ Нет карт")
+            return
+
+        card, uid = result
 
         await message.answer(
-            f"🎴 Ты получил карту!\n"
-            f"🆔 ID: {unique_id}\n"
-            f"⭐ {card_data.name} ({card_data.rarity})"
+            f"🎴 Новая карта!\n"
+            f"🆔 {uid}\n"
+            f"{card.name} {card.rarity}"
         )
 
-    # 🎒 инвентарь
-    elif text_msg == "инвентарь":
+    elif text == "инвентарь":
         items = await get_inventory(user_id)
 
         if not items:
-            await message.answer("📭 Инвентарь пуст")
+            await message.answer("📭 Пусто")
             return
 
-        text = "🎒 Твои карты:\n\n"
+        msg = "🎒 Инвентарь:\n\n"
 
         for uc, c in items[:10]:
-            text += f"🆔 {uc.id} | {c.name} ({c.rarity})\n"
+            msg += f"{uc.id} | {c.name} {c.rarity}\n"
 
-        await message.answer(text)
+        await message.answer(msg)
+
+    elif text == "/add":
+        await add_balance(user_id, 100)
+        await message.answer("💰 +100")
 
     else:
-        await message.answer("❓ Неизвестная команда")
+        await message.answer("❓ Команда?")
 
 
 if __name__ == "__main__":
