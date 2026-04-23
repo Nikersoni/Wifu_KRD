@@ -19,11 +19,10 @@ async def on_startup(dp):
 
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # создаём таблицы
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # добавим стартовые карты
+        # добавляем стартовые карты (если пусто)
         await conn.execute(text("""
         INSERT INTO cards (name, rarity) VALUES
         ('Asuna', '🟡'),
@@ -52,7 +51,13 @@ async def main_handler(message: types.Message):
         if not user:
             await create_user(user_id)
 
-        await message.answer("👋 Добро пожаловать\nНапиши: профиль")
+        await message.answer(
+            "👋 Добро пожаловать!\n"
+            "Команды:\n"
+            "профиль\n"
+            "карта\n"
+            "инвентарь"
+        )
 
     # 👤 профиль
     elif text_msg == "профиль":
